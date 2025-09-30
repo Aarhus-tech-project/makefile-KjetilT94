@@ -1,0 +1,85 @@
+CXX	:= g++
+AR	:= ar
+RM	:= rm -f
+
+SRC_DIR	:= src
+INC_DIR	:= include
+TEST_DIR	:= tests
+BUILD_DIR	:= build
+
+APP_SRCS	:= $(SRC_DIR)/main.cpp
+LIB_SRCS	:= $(SRC_DIR)/hanoi.cpp $(SRC_DIR)/bst.cpp
+TEST_SRCS	:= $(TEST_DIR)/tests.cpp
+
+APP_OBJS	:= $(BUILD_DIR)/main.o
+LIB_OBJS	:= $(BUILD_DIR)/hanoi.o $(BUILD_DIR)/bst.o
+TEST_OBJS	:= $(BUILD_DIR)/tests.o
+
+DEPS	:= $(APP_OBJS:.o=.d) $(LIB_OBJS:.o=.d) $(TEST_OBJS:.o=.d)
+
+STATIC_LIB	:= $(BUILD_DIR)/libclassics.a
+APP	:= $(BUILD_DIR)/app
+TESTS	:= $(BUILD_DIR)/tests
+
+CXXFLAGS	:= -std=c++17 -Wall -Wextra -I$(INC_DIR)
+
+DEPFLAGS	:= -MMD -MP
+
+BUILD_TYPE	?= debug
+
+ifeq ($(BUILD_TYPE), debug)
+	CXXFLAGS += -Og -g
+else ifeq ($(BUILD_TYPE), release)
+	CXXFLAGS += -O2 -DNDEBUG
+else
+	$(error Unknown BUILD_TYPE: $(BUILD_TYPE). Use 'debug' or 'release')
+endif
+
+.PHONY: all run test clean debug release
+
+all: $(APP) $(TESTS) $(STATIC_LIB)
+
+debug:
+	@$(MAKE) BUILD_TYPE=debug all
+
+release:
+	@$(MAKE) BUILD_TYPE=release all
+
+run: $(APP)
+	@echo "Running: $(APP) --hanoi 10"
+	@./$(APP) --hanoi 10
+
+test: $(TESTS)
+	@echo "Running tests...."
+	@./$(TESTS) && echo "All tests passed"
+
+clean:
+	@echo "Cleaning build directory..."
+	@$(RM) -r $(BUILD_DIR)
+
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+$(STATIC_LIB): $(LIB_OBJS) | $(BUILD_DIR)
+	@echo "Creating static library $@"
+	@$(AR) rcs $@ $^
+
+$(APP): $(APP_OBJS) $(STATIC_LIB) | $(BUILD_DIR)
+	@echo "Linking application: $@"
+	@$(CXX) $(CXXFLAGS) -o $@ $(APP_OBJS) -L$(BUILD_DIR) -lclassics
+
+$(TESTS): $(TEST_OBJS) $(STATIC_LIB) | $(BUILD_DIR)
+	@echo "Linking tests: $@"
+	@$(CXX) $(CXXFLAGS) -o $@ $(TEST_OBJS) -L$(BUILD_DIR) -lclassics
+
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	@echo "Compiling $< -> $@"
+	@$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: $(TEST_DIR)/%.cpp | $(BUILD_DIR)
+	@echo "Compiling $< -> $@"
+	@$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+
+-include $(DEPS)
